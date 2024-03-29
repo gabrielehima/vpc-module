@@ -1,0 +1,46 @@
+name: Upload
+on:
+  push:
+    branches:
+      - main
+env:
+  JFROG_NAMESPACE: "cloudops"
+  JF_URL: ${{ secrets.JF_URL }}
+  JF_ACCESS_TOKEN: ${{ secrets.TOKEN }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      src: ${{ steps.changes.outputs.vpc }}
+    defaults:
+      run:
+        working-directory: ./vpc
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with: 
+          filters: |
+            vpc:
+              - './vpc/version.txt'
+  upload:
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./vpc
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+      - name: setup
+        uses: jfrog/setup-jfrog-cli@v3
+      - name: config
+        run: |
+          export SERVER_ID="gabrielehima"
+          jf c add $SERVER_ID --url=$JF_URL --access-token=$JF_ACCESS_TOKEN --interactive=false
+          jf tfc --server-id-deploy $SERVER_ID --repo-deploy terraform-local-modules
+          jf tf p --namespace=${JFROG_NAMESPACE} --provider=local --tag=$(cat version.txt)
